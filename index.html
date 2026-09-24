@@ -350,6 +350,14 @@
   };
   const state = { work: 30, rest: 30, ex: 5, rounds: 5, rr: 10 };
 
+  // Derniers réglages : gardés dans le téléphone et retrouvés à l'ouverture
+  const SAVE = 'minuteur-reglages';
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE)) || {};
+    for (const key in FIELDS) if (FIELDS[key].values.includes(saved[key])) state[key] = saved[key];
+  } catch (e) {}
+  const saveState = () => { try { localStorage.setItem(SAVE, JSON.stringify(state)); } catch (e) {} };
+
   const pad = n => String(n).padStart(2, '0');
   const fmtTime = s => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -386,7 +394,7 @@
   };
   const closePicker = commit => {
     if (!current) return;
-    if (commit) { state[current] = FIELDS[current].values[idxNow()]; renderSetup(); }
+    if (commit) { state[current] = FIELDS[current].values[idxNow()]; saveState(); renderSetup(); }
     current = null; scrim.classList.remove('open'); sheet.classList.remove('open');
     if (lastFocus) lastFocus.focus({ preventScroll: true });
   };
