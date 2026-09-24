@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minuteur de séance</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #F1ECE6;
+    --line: rgba(255,255,255,.10);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --d: min(33vw, 14vh, 150px);
+    --D: min(62vw, 29vh, 280px);
+    --S: min(82vw, 42vh, 380px);
+
+    /* PALETTE v2 — Réglage : bleu nuit */
+    --bg-1: #122544; --bg-2: #081020;
+    --num: #9CC8FF; --sub: #86B0E6; --acc: #4C8DFF; --on-acc: #081020;
+    --track: rgba(255,255,255,.12); --flash: rgba(255,255,255,.35);
+    --dot: rgba(255,255,255,.20);
+  }
+  /* Travail : orange braise */
+  :root[data-mode="travail"] {
+    --bg-1: #4A1E0C; --bg-2: #1F0D06;
+    --num: #FFB38A; --sub: #E8A07C; --acc: #FF7A45; --on-acc: #1F0D06;
+    --track: rgba(255,255,255,.12); --flash: rgba(255,179,138,.45);
+    --dot: rgba(255,255,255,.20);
+  }
+  /* Repos (et Préparez-vous, repos entre rounds) : vert clair */
+  :root[data-mode="repos"] {
+    color-scheme: light;
+    --bg-1: #B6F5A8; --bg-2: #6FDB7E;
+    --num: #0E3B1A; --sub: #1F5A2E; --acc: #15803D; --on-acc: #F2FFF0;
+    --track: rgba(0,0,0,.12); --flash: rgba(255,255,255,.6);
+    --dot: rgba(0,0,0,.20);
+  }
+
+  html, body { height: 100%; overflow-x: hidden; overscroll-behavior: none; touch-action: pan-y; }
+  body {
+    margin: 0;
+    background: linear-gradient(160deg, var(--bg-1), var(--bg-2)) fixed;
+    background-color: var(--bg-2);
+    color: var(--num);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
+  }
+  button { touch-action: manipulation; }
+  [hidden] { display: none !important; }
+
+  /* ================= ÉCRAN DE RÉGLAGE ================= */
+  .app {
+    min-height: 100%; box-sizing: border-box;
+    padding-inline: 16px; padding-block: 16px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    grid-template-areas: "work rest" "total total" "ex rounds" "rr rr";
+    justify-items: center; align-content: center;
+    gap: 1.8vh 0; max-width: 460px; margin: 0 auto;
+  }
+  .circle {
+    appearance: none; cursor: pointer; font: inherit; color: inherit;
+    width: var(--size); height: var(--size); border-radius: 50%;
+    box-sizing: border-box; padding: 0;
+    border: calc(var(--size) * .04) solid transparent;
+    background:
+      linear-gradient(160deg, color-mix(in srgb, var(--acc) 14%, var(--bg-1)), var(--bg-2)) padding-box,
+      conic-gradient(from 200deg, var(--num), var(--acc) 45%, color-mix(in srgb, var(--acc) 30%, var(--bg-2)) 80%, var(--num)) border-box;
+    box-shadow: 0 12px 28px rgba(0,0,0,.28);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: calc(var(--size) * .02);
+    transition: transform .12s ease;
+  }
+  .circle:active { transform: scale(.95); }
+  .circle:focus-visible { outline: 3px solid var(--num); outline-offset: 5px; }
+  .circle .lbl {
+    font-size: max(10px, calc(var(--size) * .075)); font-weight: 600; white-space: nowrap;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--sub);
+  }
+  .circle .val {
+    font-size: calc(var(--size) * .26); line-height: 1; font-weight: 600;
+    font-variant-numeric: tabular-nums; letter-spacing: -.01em; color: var(--num);
+  }
+  .small { --size: var(--d); }
+  .work { grid-area: work; } .rest { grid-area: rest; }
+  .ex { grid-area: ex; } .rounds { grid-area: rounds; }
+  .rr { grid-area: rr; --size: calc(var(--d) * .92); width: calc(var(--d) * 1.55); height: calc(var(--d) * .9); }
+  .ex .val, .rounds .val { font-size: calc(var(--size) * .34); }
+  .total { grid-area: total; --size: var(--D); gap: calc(var(--size) * .03); }
+  .total .val { font-size: calc(var(--size) * .25); letter-spacing: -.02em; }
+  .total .val.long { font-size: calc(var(--size) * .19); }
+  .total .play { width: calc(var(--size) * .1); height: calc(var(--size) * .1); fill: var(--acc); }
+
+  /* Roulette */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.18); opacity: 0; pointer-events: none;
+           transition: opacity .2s ease; z-index: 10; touch-action: none; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+    background: color-mix(in srgb, var(--bg-1) 45%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4);
+    border-radius: 24px 24px 0 0; border-top: 1px solid var(--line);
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(105%); transition: transform .26s cubic-bezier(.2,.8,.2,1);
+    max-width: 520px; margin: 0 auto; overflow: hidden; touch-action: pan-y; overscroll-behavior: contain;
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; touch-action: none; }
+  .sheet-title { font-size: 17px; font-weight: 700; color: var(--num); letter-spacing: .02em; }
+  .btn-text { appearance: none; border: 0; background: none; cursor: pointer; font: 600 17px var(--font); color: var(--sub); padding: 8px 4px; }
+  .btn-ok { appearance: none; border: 0; cursor: pointer; font: 700 17px var(--font); color: var(--on-acc); background: var(--acc); padding: 10px 20px; border-radius: 999px; }
+  .btn-text:focus-visible, .btn-ok:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
+  .wheel-wrap { position: relative; margin-top: 10px; overflow: hidden; }
+  .wheel-band { position: absolute; left: 0; right: 0; top: 50%; height: 56px; transform: translateY(-50%);
+                border-radius: 14px; background: rgba(255,255,255,.10); pointer-events: none; }
+  .wheel {
+    height: 280px; overflow-y: scroll; overflow-x: hidden; scroll-snap-type: y mandatory;
+    touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    padding-block: 112px; box-sizing: border-box;
+    -webkit-mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+            mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+  }
+  .wheel::-webkit-scrollbar { display: none; }
+  .opt { height: 56px; line-height: 56px; text-align: center; scroll-snap-align: center;
+         font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums;
+         color: color-mix(in srgb, var(--num) 55%, transparent); cursor: pointer; transition: color .1s, transform .1s; }
+  .opt.sel { color: var(--num); font-weight: 700; transform: scale(1.08); }
+
+  /* ================= ÉCRAN DE SÉANCE ================= */
+  .session {
+    min-height: 100%; box-sizing: border-box;
+    padding-inline: 16px; padding-block: 24px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3.2vh;
+  }
+  .rows { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; }
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--num) 22%, transparent);
+    background: color-mix(in srgb, var(--num) 5%, transparent);
+  }
+  .row .name { font-size: 18px; font-weight: 600; color: var(--num); }
+  .dots { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--g, 6px); }
+  .dots i { width: var(--s, 16px); height: var(--s, 16px); border-radius: 50%; background: var(--dot); transition: background .2s; }
+  .dots i.on { background: var(--acc); }
+  .big {
+    appearance: none; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; font: inherit;
+    position: relative; width: var(--S); height: var(--S); border-radius: 50%;
+  }
+  .big:focus-visible { outline: 3px solid var(--num); outline-offset: 6px; }
+  .big svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  .big .track { fill: none; stroke: var(--track); stroke-width: 7; }
+  .big .prog { fill: none; stroke: var(--acc); stroke-width: 7; stroke-linecap: round; }
+  .big .inner {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: calc(var(--S) * .025);
+  }
+  .phase {
+    font-size: calc(var(--S) * .07); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--num);
+  }
+  .clock {
+    font-size: calc(var(--S) * .27); line-height: 1; font-weight: 600;
+    font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--num);
+  }
+  .clock.cd { font-size: calc(var(--S) * .36); }
+  .hint { font-size: calc(var(--S) * .045); font-weight: 600; color: var(--sub); min-height: 1.2em; }
+  .big.pulse { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+  .big.paused svg, .big.paused .clock { opacity: .55; }
+
+  .elapsed {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--sub);
+  }
+  .elapsed svg { width: 20px; height: 20px; stroke: var(--sub); fill: none; stroke-width: 2; }
+
+  .ctrls { display: flex; justify-content: center; }
+  .ctrl {
+    appearance: none; cursor: pointer; font: 700 19px var(--font);
+    color: var(--num); background: color-mix(in srgb, var(--acc) 18%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--acc) 55%, transparent);
+    padding: 16px 28px; border-radius: 999px; min-width: 220px;
+  }
+  .ctrl.warn { background: var(--acc); color: var(--on-acc); border-color: var(--acc); }
+  .ctrl:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
+  .wl { font-size: 13px; color: var(--sub); text-align: center; max-width: 320px; }
+
+  /* ================= BANC D'ÉCOUTE (temporaire) ================= */
+  .tools { grid-area: tools; }
+  .pill {
+    appearance: none; cursor: pointer; font: 600 14px var(--font); color: var(--num);
+    background: color-mix(in srgb, var(--acc) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent);
+    padding: 8px 16px; border-radius: 999px;
+  }
+  .pill:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
+  .bench {
+    min-height: 100%; box-sizing: border-box; max-width: 460px; margin: 0 auto;
+    padding-inline: 16px; padding-block: 16px 28px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .bench-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .bench h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--num); }
+  .bench h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); }
+  .note { margin: 0; font-size: 14px; line-height: 1.45; color: var(--sub); }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg button {
+    appearance: none; cursor: pointer; text-align: left; font: inherit; color: var(--num);
+    background: color-mix(in srgb, var(--num) 5%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--num) 18%, transparent);
+    border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .seg button b { font-size: 16px; }
+  .seg button span { font-size: 13px; color: var(--sub); }
+  .seg button[aria-pressed="true"] { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 22%, transparent); }
+  .seg button:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
+  .plays { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .play-btn {
+    appearance: none; cursor: pointer; font: 700 16px var(--font);
+    border-radius: 18px; padding: 18px 12px; border: 0;
+    display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 64px;
+  }
+  .play-btn svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+  .play-btn.p-work { background: linear-gradient(160deg, #4A1E0C, #1F0D06); color: #FFB38A; border: 1.5px solid #FF7A45; }
+  .play-btn.p-rest { background: linear-gradient(160deg, #B6F5A8, #6FDB7E); color: #0E3B1A; border: 1.5px solid #15803D; }
+  .play-btn.plain { background: color-mix(in srgb, var(--num) 8%, transparent); color: var(--num);
+                    border: 1.5px solid color-mix(in srgb, var(--num) 22%, transparent); }
+  .play-btn.wide { grid-column: 1 / -1; }
+  .play-btn:active { transform: scale(.97); }
+  .play-btn:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
+  .status { min-height: 1.4em; font-size: 26px; font-weight: 700; text-align: center; color: var(--num); font-variant-numeric: tabular-nums; }
+  .chosen { font-size: 15px; color: var(--num); text-align: center; }
+
+
+  .flash { position: fixed; inset: 0; background: var(--flash); pointer-events: none; opacity: 0; z-index: 30; }
+  .flash.go { animation: flash .5s ease-out; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 20px); opacity: 0; transition: .25s ease;
+    background: #2B2F39; color: var(--ink); border: 1px solid var(--line);
+    padding: 12px 18px; border-radius: 14px; font-size: 15px; max-width: calc(100% - 32px);
+    text-align: center; pointer-events: none; z-index: 20;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+    .big.pulse { animation: none; }
+    .flash.go { animation-duration: .15s; }
+  }
+</style>
+
+<!-- ============ Réglage ============ -->
+<main class="app" id="setup" aria-label="Réglage de la séance">
+  <button class="circle small work" id="t-work" data-key="work" aria-label="Temps de travail">
+    <span class="lbl">Travail</span><span class="val" data-val></span>
+  </button>
+  <button class="circle small rest" id="t-rest" data-key="rest" aria-label="Repos entre exercices">
+    <span class="lbl">Repos</span><span class="val" data-val></span>
+  </button>
+  <button class="circle total" id="go" aria-label="Démarrer la séance">
+    <span class="val" id="total"></span>
+    <svg class="play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>
+  </button>
+  <button class="circle small ex" id="t-ex" data-key="ex" aria-label="Nombre d'exercices">
+    <span class="lbl">Exercices</span><span class="val" data-val></span>
+  </button>
+  <button class="circle small rounds" id="t-rounds" data-key="rounds" aria-label="Nombre de rounds">
+    <span class="lbl">Rounds</span><span class="val" data-val></span>
+  </button>
+  <button class="circle rr" id="t-rr" data-key="rr" aria-label="Repos entre rounds">
+    <span class="lbl">Repos round</span><span class="val" data-val></span>
+  </button>
+</main>
+
+<!-- ============ Séance ============ -->
+<main class="session" id="session" hidden aria-label="Séance en cours">
+  <div class="rows">
+    <div class="row"><span class="name">Exercice</span><span class="dots" id="dots-ex"></span></div>
+    <div class="row"><span class="name">Round</span><span class="dots" id="dots-r"></span></div>
+  </div>
+  <button class="big" id="big" aria-label="Pause">
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="track" cx="100" cy="100" r="94"></circle>
+      <circle class="prog" id="prog" cx="100" cy="100" r="94"></circle>
+    </svg>
+    <span class="inner">
+      <span class="phase" id="phase"></span>
+      <span class="clock" id="clock"></span>
+      <span class="hint" id="hint"></span>
+    </span>
+  </button>
+
+  <div class="elapsed" aria-label="Temps de séance écoulé">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+    <span id="elapsed">00:00</span>
+  </div>
+
+  <div class="ctrls" id="ctrls" hidden>
+    <button class="ctrl" id="stop">Arrêter</button>
+  </div>
+  <div class="wl" id="wl" hidden></div>
+</main>
+
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="sheet-head">
+    <button class="btn-text" id="cancel">Annuler</button>
+    <div class="sheet-title" id="sheet-title"></div>
+    <button class="btn-ok" id="ok">OK</button>
+  </div>
+  <div class="wheel-wrap">
+    <div class="wheel-band"></div>
+    <div class="wheel" id="wheel" tabindex="0"></div>
+  </div>
+</div>
+
+
+<div class="flash" id="flash"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const root = document.documentElement;
+  const range = (a, b, s = 1) => { const r = []; for (let v = a; v <= b; v += s) r.push(v); return r; };
+  const TIMES = range(5, 600, 5);
+  const COUNTS = range(1, 20);
+  const PREP = 5;   // « Préparez-vous » avant la première phase (secondes)
+
+  const FIELDS = {
+    work:   { title: 'Temps de travail',      values: TIMES,  type: 'time' },
+    rest:   { title: 'Repos entre exercices', values: TIMES,  type: 'time' },
+    ex:     { title: "Nombre d'exercices",    values: COUNTS, type: 'count' },
+    rounds: { title: 'Nombre de rounds',      values: COUNTS, type: 'count' },
+    rr:     { title: 'Repos entre rounds',    values: TIMES,  type: 'time' },
+  };
+  const state = { work: 30, rest: 30, ex: 5, rounds: 5, rr: 10 };
+
+  const pad = n => String(n).padStart(2, '0');
+  const fmtTime = s => {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return h ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+  };
+  const fmt = (f, v) => f.type === 'time' ? fmtTime(v) : String(v);
+
+  const totalSeconds = () => {
+    const perRound = state.ex * state.work + (state.ex - 1) * state.rest;
+    return state.rounds * perRound + (state.rounds - 1) * state.rr;
+  };
+  const renderSetup = () => {
+    for (const key in FIELDS)
+      document.querySelector(`[data-key="${key}"] [data-val]`).textContent = fmt(FIELDS[key], state[key]);
+    const s = totalSeconds(), t = $('total');
+    t.textContent = fmtTime(s);
+    t.classList.toggle('long', s >= 3600);
+  };
+
+  // ---------- Roulette ----------
+  const ITEM = 56, scrim = $('scrim'), sheet = $('sheet'), wheel = $('wheel');
+  let current = null, lastFocus = null;
+  const idxNow = () => Math.max(0, Math.min(FIELDS[current].values.length - 1, Math.round(wheel.scrollTop / ITEM)));
+  const markSel = () => { if (!current) return; const i = idxNow();
+    wheel.querySelectorAll('.opt').forEach((o, k) => o.classList.toggle('sel', k === i)); };
+  const openPicker = key => {
+    current = key; lastFocus = document.activeElement;
+    const f = FIELDS[key];
+    $('sheet-title').textContent = f.title;
+    wheel.innerHTML = f.values.map((v, i) => `<div class="opt" data-i="${i}">${fmt(f, v)}</div>`).join('');
+    scrim.classList.add('open'); sheet.classList.add('open');
+    const i = Math.max(0, f.values.indexOf(state[key]));
+    requestAnimationFrame(() => { wheel.scrollTop = i * ITEM; markSel(); wheel.focus({ preventScroll: true }); });
+  };
+  const closePicker = commit => {
+    if (!current) return;
+    if (commit) { state[current] = FIELDS[current].values[idxNow()]; renderSetup(); }
+    current = null; scrim.classList.remove('open'); sheet.classList.remove('open');
+    if (lastFocus) lastFocus.focus({ preventScroll: true });
+  };
+  let raf0 = 0;
+  wheel.addEventListener('scroll', () => { cancelAnimationFrame(raf0); raf0 = requestAnimationFrame(markSel); });
+  wheel.addEventListener('click', e => { const o = e.target.closest('.opt'); if (o) wheel.scrollTo({ top: +o.dataset.i * ITEM, behavior: 'smooth' }); });
+  wheel.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault();
+      wheel.scrollTo({ top: (idxNow() + (e.key === 'ArrowDown' ? 1 : -1)) * ITEM, behavior: 'smooth' }); }
+    else if (e.key === 'Enter') closePicker(true);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(false); });
+  $('ok').addEventListener('click', () => closePicker(true));
+  $('cancel').addEventListener('click', () => closePicker(false));
+  scrim.addEventListener('click', () => closePicker(false));
+  let sx = 0, sy = 0;
+  sheet.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  sheet.addEventListener('touchmove', e => {
+    if (Math.abs(e.touches[0].clientX - sx) > Math.abs(e.touches[0].clientY - sy)) e.preventDefault();
+  }, { passive: false });
+  document.querySelectorAll('[data-key]').forEach(t => t.addEventListener('click', () => openPicker(t.dataset.key)));
+
+  // ---------- Séance ----------
+  // Le temps est calculé à partir de l'horloge du téléphone (et non en comptant des « tics »),
+  // pour que le minuteur ne dérive pas, même sur une longue séance.
+  const RING = 2 * Math.PI * 94;
+  const prog = $('prog');
+  prog.style.strokeDasharray = RING;
+
+  const LABEL = { prep: 'Préparez-vous', work: 'Travail', rest: 'Repos', rr: 'Repos round' };
+  const MODE  = { prep: 'repos', work: 'travail', rest: 'repos', rr: 'repos' };
+
+  let S = null;   // état de la séance
+  const now = () => performance.now();
+
+  const buildPhases = () => {
+    const ph = [{ type: 'prep', dur: PREP, e: -1, r: 0 }];
+    for (let r = 0; r < state.rounds; r++)
+      for (let e = 0; e < state.ex; e++) {
+        ph.push({ type: 'work', dur: state.work, e, r });
+        if (e < state.ex - 1) ph.push({ type: 'rest', dur: state.rest, e, r });
+        else if (r < state.rounds - 1) ph.push({ type: 'rr', dur: state.rr, e, r });
+      }
+    return ph;
+  };
+
+  const flash = () => { const f = $('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); };
+
+  const startSound = type => {
+    if (type === 'work') SOUNDS.work();
+    else if (type === 'rest' || type === 'rr') SOUNDS.rest();
+  };
+  const enterPhase = () => {
+    const p = S.phases[S.i];
+    startSound(p.type);
+    root.dataset.mode = MODE[p.type];
+    $('phase').textContent = LABEL[p.type];
+    setDots('dots-ex', state.ex, p.e);
+    setDots('dots-r', state.rounds, p.r);
+    flash();
+  };
+  // Points : exercices / rounds faits et en cours = couleur d'accent
+  const setDots = (id, n, upto) => {
+    const el = $(id);
+    if (el.children.length !== n) {
+      el.innerHTML = '<i></i>'.repeat(n);
+      el.style.setProperty('--s', n > 12 ? '9px' : n > 8 ? '12px' : '16px');
+      el.style.setProperty('--g', n > 12 ? '4px' : '6px');
+    }
+    [...el.children].forEach((d, k) => d.classList.toggle('on', k <= upto));
+  };
+
+  const start = () => {
+    audio(); applyAudioMode();
+    S = { phases: buildPhases(), i: 0, t0: now(), done: 0,
+          paused: false, pausedAt: 0, cdEnd: 0, finished: false, stopArm: false, lastTick: '' };
+    $('setup').hidden = true; $('session').hidden = false;
+    $('ctrls').hidden = true; $('wl').hidden = true; $('hint').textContent = '';
+    enterPhase();
+    wake();
+    loop();
+  };
+
+  const advance = natural => {
+    const p = S.phases[S.i], t = now();
+    const spent = natural ? p.dur * 1000 : Math.min(t - S.t0, p.dur * 1000);
+    if (p.type !== 'prep') S.done += spent;
+    S.i++;
+    if (S.i >= S.phases.length) return finish();
+    S.t0 = natural ? S.t0 + p.dur * 1000 : t;
+    enterPhase();
+  };
+
+  const finish = () => {
+    S.finished = true;
+    SOUNDS.end();
+    delete root.dataset.mode;
+    flash();
+    $('big').classList.remove('pulse', 'paused');
+    $('phase').textContent = 'Terminé';
+    setDots('dots-ex', state.ex, state.ex - 1); setDots('dots-r', state.rounds, state.rounds - 1);
+    $('clock').classList.remove('cd');
+    $('clock').textContent = fmtTime(Math.round(S.done / 1000));
+    $('hint').textContent = 'Toucher pour revenir';
+    prog.style.strokeDashoffset = 0;
+    $('elapsed').textContent = fmtTime(Math.round(S.done / 1000));
+    $('ctrls').hidden = true;
+    unwake();
+  };
+
+  const draw = () => {
+    if (!S || S.finished) return;
+    const t = now();
+    const p = S.phases[S.i], dur = p.dur * 1000;
+
+    // Reprise après pause : décompte 3-2-1
+    if (S.cdEnd) {
+      const left = S.cdEnd - t;
+      if (left <= 0) {
+        S.t0 += t - S.pausedAt; S.cdEnd = 0; S.paused = false;
+        startSound(p.type);
+        $('clock').classList.remove('cd'); $('hint').textContent = '';
+        $('big').classList.remove('paused'); flash();
+      } else {
+        $('clock').classList.add('cd');
+        const n = Math.ceil(left / 1000);
+        $('clock').textContent = n;
+        if (S.lastTick !== 'cd' + n) { S.lastTick = 'cd' + n; SOUNDS.tick(); }
+        return;
+      }
+    }
+
+    const ref = S.paused ? S.pausedAt : t;
+    let el = ref - S.t0;
+    if (!S.paused) {
+      while (el >= dur && !S.finished) { advance(true); if (S.finished) return; el = t - S.t0; }
+    }
+    const cur = S.phases[S.i], d = cur.dur * 1000;
+    const rem = Math.max(0, d - el);
+    $('clock').textContent = fmtTime(Math.ceil(rem / 1000));
+    prog.style.strokeDashoffset = RING * (1 - Math.min(1, el / d));
+    $('big').classList.toggle('pulse', !S.paused && rem <= 3000);
+    // Bips 3-2-1 avant chaque changement
+    const sec = Math.ceil(rem / 1000);
+    if (!S.paused && sec >= 1 && sec <= 3 && S.lastTick !== S.i + ':' + sec) {
+      S.lastTick = S.i + ':' + sec; SOUNDS.tick();
+    }
+    const run = S.done + (cur.type !== 'prep' ? Math.min(el, d) : 0);
+    $('elapsed').textContent = fmtTime(Math.floor(run / 1000));
+  };
+
+  let rafId = 0, iv = 0;
+  const loop = () => {
+    cancelAnimationFrame(rafId); clearInterval(iv);
+    const f = () => { draw(); if (S && !S.finished) rafId = requestAnimationFrame(f); };
+    f();
+    iv = setInterval(draw, 250);   // filet de sécurité si l'affichage ralentit
+  };
+
+  const pause = () => {
+    if (!S || S.finished || S.paused) return;
+    S.paused = true; S.pausedAt = now(); S.cdEnd = 0; S.stopArm = false;
+    $('big').classList.add('paused'); $('big').classList.remove('pulse');
+    $('big').setAttribute('aria-label', 'Reprendre');
+    $('hint').textContent = 'En pause · toucher pour reprendre';
+    $('stop').textContent = 'Arrêter'; $('stop').classList.remove('warn');
+    $('ctrls').hidden = false; $('wl').hidden = false;
+    draw();
+  };
+  const resume = () => {
+    if (!S || !S.paused || S.cdEnd) return;
+    audio(); applyAudioMode();
+    S.cdEnd = now() + 3000;
+    $('ctrls').hidden = true; $('wl').hidden = true;
+    $('big').setAttribute('aria-label', 'Pause');
+    $('hint').textContent = 'Reprise';
+    wake();
+  };
+
+  $('big').addEventListener('click', () => {
+    if (!S) return;
+    if (S.finished) return backToSetup();
+    if (S.cdEnd) return;
+    S.paused ? resume() : pause();
+  });
+  $('stop').addEventListener('click', () => {
+    if (!S.stopArm) { S.stopArm = true; $('stop').textContent = 'Confirmer'; $('stop').classList.add('warn'); return; }
+    backToSetup();
+  });
+
+  const backToSetup = () => {
+    cancelAnimationFrame(rafId); clearInterval(iv); unwake();
+    S = null; delete root.dataset.mode;
+    $('session').hidden = true; $('setup').hidden = false;
+    $('big').classList.remove('pulse', 'paused'); $('clock').classList.remove('cd');
+  };
+
+  // Si on quitte l'app : pause automatique
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pause();
+    else if (S && !S.finished && !S.paused) wake();
+  });
+
+  // ---------- Garder l'écran allumé (Wake Lock) ----------
+  let lock = null;
+  const wake = async () => {
+    const wl = $('wl');
+    try {
+      if (!('wakeLock' in navigator)) throw new Error('absent');
+      lock = await navigator.wakeLock.request('screen');
+      wl.textContent = 'Écran maintenu allumé : oui';
+    } catch (e) {
+      wl.textContent = "Écran maintenu allumé : non. Réglez le verrouillage automatique sur « Jamais » pendant les tests.";
+    }
+  };
+  const unwake = () => { try { lock && lock.release(); } catch (e) {} lock = null; };
+
+
+  // ================= SONS =================
+  // Web Audio : les sons sont fabriqués par le téléphone, sans fichier à télécharger.
+  let ctx = null, master = null;
+  const audio = () => {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -12; comp.ratio.value = 4;
+      master = ctx.createGain(); master.gain.value = 0.9;
+      master.connect(comp); comp.connect(ctx.destination);
+    }
+    if (ctx.state !== 'running') ctx.resume();
+    return ctx;
+  };
+
+  // Une note : fréquence (Hz), début (s), durée (s), timbre
+  const note = (freq, at, dur, timbre) => {
+    const c = audio(), t = c.currentTime + at;
+    const env = (g, peak, a, d, tail) => {
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(peak, t + a);
+      g.gain.setValueAtTime(peak, t + Math.max(a, d - tail));
+      g.gain.linearRampToValueAtTime(0, t + d);
+    };
+    if (timbre === 'cloche') {
+      const parts = [[1, .55], [2.76, .25], [5.4, .12], [8.93, .06]];
+      const ring = Math.max(0.35, dur * 1.6);
+      parts.forEach(([m, a], k) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sine'; o.frequency.value = freq * m;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(a, t + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + ring / (1 + k * 0.8));
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + ring + 0.05);
+      });
+      return;
+    }
+    const o = c.createOscillator(), g = c.createGain();
+    o.frequency.value = freq;
+    if (timbre === 'elec') {
+      o.type = 'square';
+      const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2600; f.Q.value = 0.7;
+      o.connect(f); f.connect(g); env(g, 0.28, 0.005, dur, 0.02);
+    } else if (timbre === 'doux') {
+      o.type = 'triangle'; o.connect(g); env(g, 0.6, 0.035, dur, 0.12);
+    } else {
+      o.type = 'sine'; o.connect(g); env(g, 0.7, 0.008, dur, 0.05);
+    }
+    g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+  };
+
+  // Bruit blanc (souffle), créé une seule fois
+  let noiseBuf = null;
+  const noise = () => {
+    const c = audio();
+    if (!noiseBuf) {
+      noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const n = c.createBufferSource(); n.buffer = noiseBuf; return n;
+  };
+  // Son « cuivré » (fanfare) : dent de scie filtrée qui s'éclaircit à l'attaque
+  const brass = (freq, at, dur, vol = 0.22) => {
+    const c = audio(), t = c.currentTime + at;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 1;
+    f.frequency.setValueAtTime(freq * 1.5, t);
+    f.frequency.linearRampToValueAtTime(freq * 6, t + 0.04);
+    f.frequency.linearRampToValueAtTime(freq * 3, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.02);
+    g.gain.setValueAtTime(vol, t + dur - 0.06);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    [1, 1.004].forEach(det => {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq * det;
+      o.connect(f); o.start(t); o.stop(t + dur + 0.05);
+    });
+    f.connect(g); g.connect(master);
+  };
+
+  const WORK = {
+    // Départ : note aiguë brillante (une octave au-dessus des bips 3-2-1), attaque qui « claque »
+    go: (at = 0) => {
+      const c = audio(), t = c.currentTime + at;
+      const g = c.createGain(), f = c.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = 5000;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.32, t + 0.005);
+      g.gain.setValueAtTime(0.32, t + 0.6);
+      g.gain.linearRampToValueAtTime(0, t + 0.75);
+      [['square', 1], ['sine', 0.5]].forEach(([type, m]) => {
+        const o = c.createOscillator(); o.type = type;
+        o.frequency.setValueAtTime(1568 * m, t);
+        o.frequency.exponentialRampToValueAtTime(1760 * m, t + 0.035);
+        o.connect(f); o.start(t); o.stop(t + 0.8);
+      });
+      f.connect(g); g.connect(master);
+    },
+    // Départ + moteur qui monte en régime
+    vroom: (at = 0) => {
+      WORK.go(at);
+      const c = audio(), t = c.currentTime + at;
+      const f = c.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 4;
+      f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(2200, t + 0.8);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.4, t + 0.05);
+      g.gain.setValueAtTime(0.4, t + 0.65); g.gain.linearRampToValueAtTime(0, t + 0.95);
+      [1, 1.012].forEach(det => {
+        const o = c.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(75 * det, t);
+        o.frequency.exponentialRampToValueAtTime(280 * det, t + 0.85);
+        o.connect(f); o.start(t); o.stop(t + 1);
+      });
+      f.connect(g); g.connect(master);
+    },
+  };
+
+  const REST = {
+    // Pschhh : souffle dont le filtre descend, comme de l'air qui s'échappe
+    hiss: (at = 0, vol = 0.9) => {
+      const c = audio(), t = c.currentTime + at, n = noise();
+      const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.1;
+      f.frequency.setValueAtTime(5500, t); f.frequency.exponentialRampToValueAtTime(600, t + 1.2);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+      n.connect(f); f.connect(g); g.connect(master); n.start(t); n.stop(t + 1.35);
+    },
+    // Dégonflage : souffle + sifflement qui descend (plus audible par-dessus la musique)
+    deflate: (at = 0) => {
+      REST.hiss(at, 0.5);
+      const c = audio(), t = c.currentTime + at;
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(1100, t); o.frequency.exponentialRampToValueAtTime(240, t + 1.1);
+      const lfo = c.createOscillator(), lg = c.createGain();
+      lfo.frequency.value = 9; lg.gain.value = 22; lfo.connect(lg); lg.connect(o.frequency);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.45, t + 0.03);
+      g.gain.setValueAtTime(0.45, t + 0.8); g.gain.linearRampToValueAtTime(0, t + 1.15);
+      o.connect(g); g.connect(master);
+      o.start(t); lfo.start(t); o.stop(t + 1.2); lfo.stop(t + 1.2);
+    },
+  };
+
+  const END = {
+    // Fanfare : ta-ta-ta-taaa puis accord majeur tenu
+    fanfare: (at = 0) => {
+      [[392, 0, .13], [523, .15, .13], [659, .30, .13], [784, .45, .3]].forEach(([f, d, l]) => brass(f, at + d, l));
+      [523, 659, 784, 1047].forEach(f => brass(f, at + 0.8, 1.1, 0.13));
+    },
+    // Carillon : cloches qui montent, puis scintillement
+    carillon: (at = 0) => {
+      [1047, 1319, 1568, 2093].forEach((f, k) => note(f, at + k * 0.11, 0.5, 'cloche'));
+      [1047, 1319, 1568, 2093].forEach(f => note(f, at + 0.6, 0.9, 'cloche'));
+      [3136, 2637, 3520].forEach((f, k) => note(f, at + 0.75 + k * 0.08, 0.15, 'cloche'));
+    },
+  };
+
+  // Sons retenus au banc d'écoute : 3-2-1 Doux · Départ · Dégonflage sifflé · Fanfare
+  const SOUNDS = {
+    tick: () => note(880, 0, 0.12, 'doux'),
+    work: () => WORK.go(),
+    rest: () => REST.deflate(),
+    end:  () => END.fanfare(),
+  };
+
+  const toast = $('toast'); let tt = 0;
+
+  // ---------- Mode audio ----------
+  // « transient » : la musique baisse brièvement pendant chaque bip, sans jamais s'arrêter.
+  // (Jamais « playback » : il mettrait la musique en pause.)
+  const applyAudioMode = () => {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'transient'; } catch (e) {}
+  };
+  applyAudioMode();
+
+  $('go').addEventListener('click', start);
+
+  renderSetup();
+})();
+</script>
