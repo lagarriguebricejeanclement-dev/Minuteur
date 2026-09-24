@@ -60,7 +60,7 @@
   /* ================= ÉCRAN DE RÉGLAGE ================= */
   .app {
     position: fixed; inset: 0; overflow-y: auto; box-sizing: border-box;
-    padding-inline: 16px; padding-block: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-bottom));
+    padding-inline: 16px; padding-block: calc(max(16px, env(safe-area-inset-top)) + env(safe-area-inset-top)) max(16px, env(safe-area-inset-bottom));
     display: grid; grid-template-columns: 1fr 1fr;
     grid-template-areas: "work rest" "total total" "ex rounds" "rr rr";
     justify-items: center; align-content: center;
