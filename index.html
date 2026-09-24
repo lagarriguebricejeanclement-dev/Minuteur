@@ -99,6 +99,27 @@
   .total .val.long { font-size: calc(var(--size) * .19); }
   .total .play { width: calc(var(--size) * .1); height: calc(var(--size) * .1); fill: var(--acc); }
 
+  /* Bouton Réglages (roue dentée) */
+  .gear { position: absolute; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
+          appearance: none; border: 0; background: none; cursor: pointer; padding: 10px; line-height: 0; }
+  .gear svg { width: 28px; height: 28px; fill: none; stroke: var(--sub); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .gear:active { transform: scale(.92); }
+  .gear:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; border-radius: 12px; }
+
+  /* Panneau Réglages */
+  .head-gap { width: 64px; }
+  .prefs-lbl { margin: 18px 4px 8px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); }
+  .langs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .langs button {
+    appearance: none; cursor: pointer; text-align: left; font: 600 20px var(--font); color: var(--num);
+    background: color-mix(in srgb, var(--num) 5%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--num) 18%, transparent);
+    border-radius: 16px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .langs button[aria-checked="true"] { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 22%, transparent); }
+  .langs button[aria-checked="true"]::after { content: "✓"; color: var(--acc); font-weight: 700; }
+  .langs button:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
+
   /* Roulette */
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.18); opacity: 0; pointer-events: none;
            transition: opacity .2s ease; z-index: 10; touch-action: none; }
@@ -263,33 +284,36 @@
 </style>
 
 <!-- ============ Réglage ============ -->
-<main class="app" id="setup" aria-label="Réglage de la séance">
-  <button class="circle small work" id="t-work" data-key="work" aria-label="Temps de travail">
-    <span class="lbl">Travail</span><span class="val" data-val></span>
+<main class="app" id="setup" data-ta="aSetup">
+  <button class="circle small work" id="t-work" data-key="work" data-ta="tWork">
+    <span class="lbl" data-t="work">Travail</span><span class="val" data-val></span>
   </button>
-  <button class="circle small rest" id="t-rest" data-key="rest" aria-label="Repos entre exercices">
-    <span class="lbl">Repos</span><span class="val" data-val></span>
+  <button class="circle small rest" id="t-rest" data-key="rest" data-ta="tRest">
+    <span class="lbl" data-t="rest">Repos</span><span class="val" data-val></span>
   </button>
-  <button class="circle total" id="go" aria-label="Démarrer la séance">
+  <button class="circle total" id="go" data-ta="aStart">
     <span class="val" id="total"></span>
     <svg class="play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>
   </button>
-  <button class="circle small ex" id="t-ex" data-key="ex" aria-label="Nombre d'exercices">
-    <span class="lbl">Exercices</span><span class="val" data-val></span>
+  <button class="circle small ex" id="t-ex" data-key="ex" data-ta="tEx">
+    <span class="lbl" data-t="exs">Exercices</span><span class="val" data-val></span>
   </button>
-  <button class="circle small rounds" id="t-rounds" data-key="rounds" aria-label="Nombre de rounds">
-    <span class="lbl">Rounds</span><span class="val" data-val></span>
+  <button class="circle small rounds" id="t-rounds" data-key="rounds" data-ta="tRounds">
+    <span class="lbl" data-t="rounds">Rounds</span><span class="val" data-val></span>
   </button>
-  <button class="circle rr" id="t-rr" data-key="rr" aria-label="Repos entre rounds">
-    <span class="lbl">Repos round</span><span class="val" data-val></span>
+  <button class="circle rr" id="t-rr" data-key="rr" data-ta="tRr">
+    <span class="lbl" data-t="rr">Repos round</span><span class="val" data-val></span>
+  </button>
+  <button class="gear" id="gear" data-ta="settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 </main>
 
 <!-- ============ Séance ============ -->
-<main class="session" id="session" hidden aria-label="Séance en cours">
+<main class="session" id="session" hidden data-ta="aSession">
   <div class="rows">
-    <div class="row"><span class="name">Exercice</span><span class="dots" id="dots-ex"></span></div>
-    <div class="row"><span class="name">Round</span><span class="dots" id="dots-r"></span></div>
+    <div class="row"><span class="name" data-t="ex1">Exercice</span><span class="dots" id="dots-ex"></span></div>
+    <div class="row"><span class="name" data-t="round1">Round</span><span class="dots" id="dots-r"></span></div>
   </div>
   <button class="big" id="big" aria-label="Pause">
     <svg viewBox="0 0 200 200" aria-hidden="true">
@@ -303,13 +327,13 @@
     </span>
   </button>
 
-  <div class="elapsed" aria-label="Temps de séance écoulé">
+  <div class="elapsed" data-ta="aElapsed">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
     <span id="elapsed">00:00</span>
   </div>
 
   <div class="ctrls" id="ctrls" hidden>
-    <button class="ctrl" id="stop">Arrêter</button>
+    <button class="ctrl" id="stop" data-t="stop">Arrêter</button>
   </div>
   <div class="wl" id="wl" hidden></div>
 </main>
@@ -318,7 +342,7 @@
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
   <div class="sheet-head">
-    <button class="btn-text" id="cancel">Annuler</button>
+    <button class="btn-text" id="cancel" data-t="cancel">Annuler</button>
     <div class="sheet-title" id="sheet-title"></div>
     <button class="btn-ok" id="ok">OK</button>
   </div>
@@ -328,6 +352,20 @@
   </div>
 </div>
 
+
+<div class="sheet" id="prefs" role="dialog" aria-modal="true" aria-labelledby="prefs-title">
+  <div class="sheet-head">
+    <span class="head-gap"></span>
+    <div class="sheet-title" id="prefs-title" data-t="settings">Réglages</div>
+    <button class="btn-ok" id="prefs-ok">OK</button>
+  </div>
+  <div class="prefs-lbl" data-t="language">Langue</div>
+  <div class="langs" id="langs" role="radiogroup">
+    <button role="radio" data-lang="fr">Français</button>
+    <button role="radio" data-lang="es">Español</button>
+    <button role="radio" data-lang="en">English</button>
+  </div>
+</div>
 
 <div class="flash" id="flash"></div>
 <div class="toast" id="toast" role="status"></div>
@@ -341,12 +379,59 @@
   const COUNTS = range(1, 20);
   const PREP = 5;   // « Préparez-vous » avant la première phase (secondes)
 
+  // ---------- Langues ----------
+  const TEXTS = {
+    fr: { title: 'Minuteur de séance', aSetup: 'Réglage de la séance', aStart: 'Démarrer la séance',
+          aSession: 'Séance en cours', aElapsed: 'Temps de séance écoulé',
+          work: 'Travail', rest: 'Repos', exs: 'Exercices', rounds: 'Rounds', rr: 'Repos round',
+          tWork: 'Temps de travail', tRest: 'Repos entre exercices', tEx: "Nombre d'exercices",
+          tRounds: 'Nombre de rounds', tRr: 'Repos entre rounds',
+          ex1: 'Exercice', round1: 'Round', prep: 'Préparez-vous', done: 'Terminé',
+          back: 'Toucher pour revenir', paused: 'En pause · toucher pour reprendre', resuming: 'Reprise',
+          pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter', confirm: 'Confirmer', cancel: 'Annuler',
+          settings: 'Réglages', language: 'Langue',
+          wlYes: 'Écran maintenu allumé : oui',
+          wlNo: 'Écran maintenu allumé : non. Réglez le verrouillage automatique sur « Jamais » pendant les tests.' },
+    es: { title: 'Temporizador de sesión', aSetup: 'Ajuste de la sesión', aStart: 'Iniciar la sesión',
+          aSession: 'Sesión en curso', aElapsed: 'Tiempo de sesión transcurrido',
+          work: 'Trabajo', rest: 'Descanso', exs: 'Ejercicios', rounds: 'Rondas', rr: 'Descanso ronda',
+          tWork: 'Tiempo de trabajo', tRest: 'Descanso entre ejercicios', tEx: 'Número de ejercicios',
+          tRounds: 'Número de rondas', tRr: 'Descanso entre rondas',
+          ex1: 'Ejercicio', round1: 'Ronda', prep: 'Prepárate', done: 'Terminado',
+          back: 'Toca para volver', paused: 'En pausa · toca para reanudar', resuming: 'Reanudando',
+          pause: 'Pausa', resume: 'Reanudar', stop: 'Detener', confirm: 'Confirmar', cancel: 'Cancelar',
+          settings: 'Ajustes', language: 'Idioma',
+          wlYes: 'Pantalla siempre encendida: sí',
+          wlNo: 'Pantalla siempre encendida: no. Pon el bloqueo automático en «Nunca» durante las pruebas.' },
+    en: { title: 'Workout timer', aSetup: 'Workout setup', aStart: 'Start workout',
+          aSession: 'Workout in progress', aElapsed: 'Workout time elapsed',
+          work: 'Work', rest: 'Rest', exs: 'Exercises', rounds: 'Rounds', rr: 'Round rest',
+          tWork: 'Work time', tRest: 'Rest between exercises', tEx: 'Number of exercises',
+          tRounds: 'Number of rounds', tRr: 'Rest between rounds',
+          ex1: 'Exercise', round1: 'Round', prep: 'Get ready', done: 'Done',
+          back: 'Tap to go back', paused: 'Paused · tap to resume', resuming: 'Resuming',
+          pause: 'Pause', resume: 'Resume', stop: 'Stop', confirm: 'Confirm', cancel: 'Cancel',
+          settings: 'Settings', language: 'Language',
+          wlYes: 'Screen kept on: yes',
+          wlNo: 'Screen kept on: no. Set Auto-Lock to “Never” during tests.' },
+  };
+  const LANG_KEY = 'minuteur-langue';
+  let lang = 'fr';
+  try { const l = localStorage.getItem(LANG_KEY); if (TEXTS[l]) lang = l; } catch (e) {}
+  const t = k => TEXTS[lang][k];
+  const applyLang = () => {
+    root.lang = lang; document.title = t('title');
+    document.querySelectorAll('[data-t]').forEach(el => el.textContent = t(el.dataset.t));
+    document.querySelectorAll('[data-ta]').forEach(el => el.setAttribute('aria-label', t(el.dataset.ta)));
+    document.querySelectorAll('[data-lang]').forEach(b => b.setAttribute('aria-checked', b.dataset.lang === lang));
+  };
+
   const FIELDS = {
-    work:   { title: 'Temps de travail',      values: TIMES,  type: 'time' },
-    rest:   { title: 'Repos entre exercices', values: TIMES,  type: 'time' },
-    ex:     { title: "Nombre d'exercices",    values: COUNTS, type: 'count' },
-    rounds: { title: 'Nombre de rounds',      values: COUNTS, type: 'count' },
-    rr:     { title: 'Repos entre rounds',    values: TIMES,  type: 'time' },
+    work:   { title: 'tWork',   values: TIMES,  type: 'time' },
+    rest:   { title: 'tRest',   values: TIMES,  type: 'time' },
+    ex:     { title: 'tEx',     values: COUNTS, type: 'count' },
+    rounds: { title: 'tRounds', values: COUNTS, type: 'count' },
+    rr:     { title: 'tRr',     values: TIMES,  type: 'time' },
   };
   const state = { work: 30, rest: 30, ex: 5, rounds: 5, rr: 10 };
 
@@ -386,7 +471,7 @@
   const openPicker = key => {
     current = key; lastFocus = document.activeElement;
     const f = FIELDS[key];
-    $('sheet-title').textContent = f.title;
+    $('sheet-title').textContent = t(f.title);
     wheel.innerHTML = f.values.map((v, i) => `<div class="opt" data-i="${i}">${fmt(f, v)}</div>`).join('');
     scrim.classList.add('open'); sheet.classList.add('open');
     const i = Math.max(0, f.values.indexOf(state[key]));
@@ -406,10 +491,10 @@
       wheel.scrollTo({ top: (idxNow() + (e.key === 'ArrowDown' ? 1 : -1)) * ITEM, behavior: 'smooth' }); }
     else if (e.key === 'Enter') closePicker(true);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePicker(false); closePrefs(); } });
   $('ok').addEventListener('click', () => closePicker(true));
   $('cancel').addEventListener('click', () => closePicker(false));
-  scrim.addEventListener('click', () => closePicker(false));
+  scrim.addEventListener('click', () => { closePicker(false); closePrefs(); });
   let sx = 0, sy = 0;
   sheet.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
   sheet.addEventListener('touchmove', e => {
@@ -424,7 +509,7 @@
   const prog = $('prog');
   prog.style.strokeDasharray = RING;
 
-  const LABEL = { prep: 'Préparez-vous', work: 'Travail', rest: 'Repos', rr: 'Repos round' };
+  const LABEL = { prep: 'prep', work: 'work', rest: 'rest', rr: 'rr' };
   const MODE  = { prep: 'repos', work: 'travail', rest: 'repos', rr: 'repos' };
 
   let S = null;   // état de la séance
@@ -451,7 +536,7 @@
     const p = S.phases[S.i];
     startSound(p.type);
     root.dataset.mode = MODE[p.type];
-    $('phase').textContent = LABEL[p.type];
+    $('phase').textContent = t(LABEL[p.type]);
     setDots('dots-ex', state.ex, p.e);
     setDots('dots-r', state.rounds, p.r);
     flash();
@@ -494,11 +579,11 @@
     delete root.dataset.mode;
     flash();
     $('big').classList.remove('pulse', 'paused');
-    $('phase').textContent = 'Terminé';
+    $('phase').textContent = t('done');
     setDots('dots-ex', state.ex, state.ex - 1); setDots('dots-r', state.rounds, state.rounds - 1);
     $('clock').classList.remove('cd');
     $('clock').textContent = fmtTime(Math.round(S.done / 1000));
-    $('hint').textContent = 'Toucher pour revenir';
+    $('hint').textContent = t('back');
     prog.style.strokeDashoffset = 0;
     $('elapsed').textContent = fmtTime(Math.round(S.done / 1000));
     $('ctrls').hidden = true;
@@ -558,9 +643,9 @@
     if (!S || S.finished || S.paused) return;
     S.paused = true; S.pausedAt = now(); S.cdEnd = 0; S.stopArm = false;
     $('big').classList.add('paused'); $('big').classList.remove('pulse');
-    $('big').setAttribute('aria-label', 'Reprendre');
-    $('hint').textContent = 'En pause · toucher pour reprendre';
-    $('stop').textContent = 'Arrêter'; $('stop').classList.remove('warn');
+    $('big').setAttribute('aria-label', t('resume'));
+    $('hint').textContent = t('paused');
+    $('stop').textContent = t('stop'); $('stop').classList.remove('warn');
     $('ctrls').hidden = false; $('wl').hidden = false;
     draw();
   };
@@ -569,8 +654,8 @@
     audio(); applyAudioMode();
     S.cdEnd = now() + 3000;
     $('ctrls').hidden = true; $('wl').hidden = true;
-    $('big').setAttribute('aria-label', 'Pause');
-    $('hint').textContent = 'Reprise';
+    $('big').setAttribute('aria-label', t('pause'));
+    $('hint').textContent = t('resuming');
     wake();
   };
 
@@ -581,7 +666,7 @@
     S.paused ? resume() : pause();
   });
   $('stop').addEventListener('click', () => {
-    if (!S.stopArm) { S.stopArm = true; $('stop').textContent = 'Confirmer'; $('stop').classList.add('warn'); return; }
+    if (!S.stopArm) { S.stopArm = true; $('stop').textContent = t('confirm'); $('stop').classList.add('warn'); return; }
     backToSetup();
   });
 
@@ -605,9 +690,9 @@
     try {
       if (!('wakeLock' in navigator)) throw new Error('absent');
       lock = await navigator.wakeLock.request('screen');
-      wl.textContent = 'Écran maintenu allumé : oui';
+      wl.textContent = t('wlYes');
     } catch (e) {
-      wl.textContent = "Écran maintenu allumé : non. Réglez le verrouillage automatique sur « Jamais » pendant les tests.";
+      wl.textContent = t('wlNo');
     }
   };
   const unwake = () => { try { lock && lock.release(); } catch (e) {} lock = null; };
@@ -792,6 +877,29 @@
 
   $('go').addEventListener('click', start);
 
+  // ---------- Panneau Réglages (langue) ----------
+  const prefs = $('prefs');
+  let prefsFocus = null;
+  const openPrefs = () => {
+    prefsFocus = document.activeElement;
+    scrim.classList.add('open'); prefs.classList.add('open');
+    requestAnimationFrame(() => prefs.querySelector('[aria-checked="true"]').focus({ preventScroll: true }));
+  };
+  function closePrefs() {
+    if (!prefs.classList.contains('open')) return;
+    scrim.classList.remove('open'); prefs.classList.remove('open');
+    if (prefsFocus) prefsFocus.focus({ preventScroll: true });
+  }
+  $('gear').addEventListener('click', openPrefs);
+  $('prefs-ok').addEventListener('click', closePrefs);
+  $('langs').addEventListener('click', e => {
+    const b = e.target.closest('[data-lang]'); if (!b) return;
+    lang = b.dataset.lang;
+    try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+    applyLang();
+  });
+
+  applyLang();
   renderSetup();
 
   // ---------- Hors ligne ----------
