@@ -785,5 +785,8 @@
   $('go').addEventListener('click', start);
 
   renderSetup();
+
+  // ---------- Hors ligne ----------
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
