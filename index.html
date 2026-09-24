@@ -99,11 +99,10 @@
   .total .val.long { font-size: calc(var(--size) * .19); }
   .total .play { width: calc(var(--size) * .1); height: calc(var(--size) * .1); fill: var(--acc); }
 
-  /* Bouton Réglages (un point) */
+  /* Bouton Réglages (roue dentée) */
   .gear { position: absolute; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
           appearance: none; border: 0; background: none; cursor: pointer; padding: 10px; line-height: 0; }
-  .gear { padding: 19px; }
-  .gear i { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--sub); }
+  .gear svg { width: 28px; height: 28px; fill: none; stroke: var(--sub); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .gear:active { transform: scale(.92); }
   .gear:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; border-radius: 12px; }
 
@@ -305,7 +304,9 @@
   <button class="circle rr" id="t-rr" data-key="rr" data-ta="tRr">
     <span class="lbl" data-t="rr">Repos round</span><span class="val" data-val></span>
   </button>
-  <button class="gear" id="gear" data-ta="settings"><i></i></button>
+  <button class="gear" id="gear" data-ta="settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
 </main>
 
 <!-- ============ Séance ============ -->
