@@ -97,6 +97,8 @@
   .total { grid-area: total; --size: var(--D); gap: calc(var(--size) * .03); }
   .total .val { font-size: calc(var(--size) * .25); letter-spacing: -.02em; }
   .total .val.long { font-size: calc(var(--size) * .19); }
+  .work .val.word { font-size: calc(var(--size) * .19); }
+  .total .unit { font-size: calc(var(--size) * .08); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--sub); }
   .total .play { width: calc(var(--size) * .1); height: calc(var(--size) * .1); fill: var(--acc); }
 
   /* Bouton Réglages (roue dentée) */
@@ -212,6 +214,7 @@
     border: 1.5px solid color-mix(in srgb, var(--acc) 55%, transparent);
     padding: 16px 28px; border-radius: 999px; min-width: 220px;
   }
+  .ctrl.mini { font-size: 15px; padding: 10px 18px; min-width: 0; }
   .ctrl.warn { background: var(--acc); color: var(--on-acc); border-color: var(--acc); }
   .ctrl:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
   .wl { font-size: 13px; color: var(--sub); text-align: center; max-width: 320px; }
@@ -293,6 +296,7 @@
   </button>
   <button class="circle total" id="go" data-ta="aStart">
     <span class="val" id="total"></span>
+    <span class="unit" id="total-unit" data-t="sets" hidden>Séries</span>
     <svg class="play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>
   </button>
   <button class="circle small ex" id="t-ex" data-key="ex" data-ta="tEx">
@@ -390,6 +394,7 @@
           back: 'Toucher pour revenir', paused: 'En pause · toucher pour reprendre', resuming: 'Reprise',
           pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter', confirm: 'Confirmer', cancel: 'Annuler',
           settings: 'Réglages', language: 'Langue',
+          manual: 'Manuel', sets: 'Séries', done1: 'Done', setDone: 'Série terminée', aStartSets: 'Démarrer la séance : {n} séries',
           wlYes: 'Écran maintenu allumé : oui',
           wlNo: 'Écran maintenu allumé : non. Réglez le verrouillage automatique sur « Jamais » pendant les tests.' },
     es: { title: 'Temporizador de sesión', aSetup: 'Ajuste de la sesión', aStart: 'Iniciar la sesión',
@@ -401,6 +406,7 @@
           back: 'Toca para volver', paused: 'En pausa · toca para reanudar', resuming: 'Reanudando',
           pause: 'Pausa', resume: 'Reanudar', stop: 'Detener', confirm: 'Confirmar', cancel: 'Cancelar',
           settings: 'Ajustes', language: 'Idioma',
+          manual: 'Manual', sets: 'Series', done1: 'Done', setDone: 'Serie terminada', aStartSets: 'Iniciar la sesión: {n} series',
           wlYes: 'Pantalla siempre encendida: sí',
           wlNo: 'Pantalla siempre encendida: no. Pon el bloqueo automático en «Nunca» durante las pruebas.' },
     en: { title: 'Workout timer', aSetup: 'Workout setup', aStart: 'Start workout',
@@ -412,6 +418,7 @@
           back: 'Tap to go back', paused: 'Paused · tap to resume', resuming: 'Resuming',
           pause: 'Pause', resume: 'Resume', stop: 'Stop', confirm: 'Confirm', cancel: 'Cancel',
           settings: 'Settings', language: 'Language',
+          manual: 'Manual', sets: 'Sets', done1: 'Done', setDone: 'Set done', aStartSets: 'Start workout: {n} sets',
           wlYes: 'Screen kept on: yes',
           wlNo: 'Screen kept on: no. Set Auto-Lock to “Never” during tests.' },
   };
@@ -427,7 +434,8 @@
   };
 
   const FIELDS = {
-    work:   { title: 'tWork',   values: TIMES,  type: 'time' },
+    // 0 = « Manuel » : pas de durée, on touche l'écran quand la série est finie
+    work:   { title: 'tWork',   values: [0, ...TIMES], type: 'time' },
     rest:   { title: 'tRest',   values: TIMES,  type: 'time' },
     ex:     { title: 'tEx',     values: COUNTS, type: 'count' },
     rounds: { title: 'tRounds', values: COUNTS, type: 'count' },
@@ -448,7 +456,8 @@
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return h ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
   };
-  const fmt = (f, v) => f.type === 'time' ? fmtTime(v) : String(v);
+  const fmt = (f, v) => f.type === 'time' ? (v === 0 ? t('manual') : fmtTime(v)) : String(v);
+  const MANUAL_GUARD = 2000;   // touches ignorées pendant les 2 premières secondes d'une série manuelle
 
   const totalSeconds = () => {
     const perRound = state.ex * state.work + (state.ex - 1) * state.rest;
@@ -457,9 +466,19 @@
   const renderSetup = () => {
     for (const key in FIELDS)
       document.querySelector(`[data-key="${key}"] [data-val]`).textContent = fmt(FIELDS[key], state[key]);
-    const s = totalSeconds(), t = $('total');
-    t.textContent = fmtTime(s);
-    t.classList.toggle('long', s >= 3600);
+    const tot = $('total'), manual = state.work === 0;
+    document.querySelector('[data-key="work"] [data-val]').classList.toggle('word', manual);
+    $('total-unit').hidden = !manual;
+    if (manual) {
+      tot.textContent = String(state.ex * state.rounds);
+      tot.classList.remove('long');
+      $('go').setAttribute('aria-label', t('aStartSets').replace('{n}', state.ex * state.rounds));
+    } else {
+      const s = totalSeconds();
+      tot.textContent = fmtTime(s);
+      tot.classList.toggle('long', s >= 3600);
+      $('go').setAttribute('aria-label', t('aStart'));
+    }
   };
 
   // ---------- Roulette ----------
@@ -519,7 +538,7 @@
     const ph = [{ type: 'prep', dur: PREP, e: -1, r: 0 }];
     for (let r = 0; r < state.rounds; r++)
       for (let e = 0; e < state.ex; e++) {
-        ph.push({ type: 'work', dur: state.work, e, r });
+        ph.push({ type: 'work', dur: state.work, e, r, manual: state.work === 0 });
         if (e < state.ex - 1) ph.push({ type: 'rest', dur: state.rest, e, r });
         else if (r < state.rounds - 1) ph.push({ type: 'rr', dur: state.rr, e, r });
       }
@@ -539,6 +558,13 @@
     $('phase').textContent = t(LABEL[p.type]);
     setDots('dots-ex', state.ex, p.e);
     setDots('dots-r', state.rounds, p.r);
+    // Série manuelle : petit bouton Arrêter visible, le grand cercle sert à dire « fini »
+    const stop = $('stop');
+    stop.classList.toggle('mini', !!p.manual);
+    stop.textContent = t('stop'); stop.classList.remove('warn'); S.stopArm = false;
+    $('ctrls').hidden = !p.manual;
+    $('hint').textContent = '';
+    $('big').setAttribute('aria-label', t(p.manual ? 'setDone' : 'pause'));
     flash();
   };
   // Points : exercices / rounds faits et en cours = couleur d'accent
@@ -565,7 +591,7 @@
 
   const advance = natural => {
     const p = S.phases[S.i], t = now();
-    const spent = natural ? p.dur * 1000 : Math.min(t - S.t0, p.dur * 1000);
+    const spent = p.manual ? t - S.t0 : natural ? p.dur * 1000 : Math.min(t - S.t0, p.dur * 1000);
     if (p.type !== 'prep') S.done += spent;
     S.i++;
     if (S.i >= S.phases.length) return finish();
@@ -603,6 +629,7 @@
         startSound(p.type);
         $('clock').classList.remove('cd'); $('hint').textContent = '';
         $('big').classList.remove('paused'); flash();
+        if (p.manual) { $('stop').classList.add('mini'); $('ctrls').hidden = false; }
       } else {
         $('clock').classList.add('cd');
         const n = Math.ceil(left / 1000);
@@ -614,8 +641,21 @@
 
     const ref = S.paused ? S.pausedAt : t;
     let el = ref - S.t0;
+    // Série manuelle : « Done » en grand, chrono qui monte en dessous, pas de fin automatique
+    if (p.manual) {
+      $('clock').classList.remove('cd');
+      $('clock').textContent = TEXTS[lang].done1;
+      if (!S.paused) $('hint').textContent = fmtTime(Math.floor(el / 1000));
+      prog.style.strokeDashoffset = RING;
+      $('big').classList.remove('pulse');
+      $('elapsed').textContent = fmtTime(Math.floor((S.done + el) / 1000));
+      return;
+    }
     if (!S.paused) {
-      while (el >= dur && !S.finished) { advance(true); if (S.finished) return; el = t - S.t0; }
+      while (!S.phases[S.i].manual && el >= S.phases[S.i].dur * 1000) {
+        advance(true); if (S.finished) return; el = t - S.t0;
+      }
+      if (S.phases[S.i].manual) return draw();   // on vient d'entrer dans une série manuelle
     }
     const cur = S.phases[S.i], d = cur.dur * 1000;
     const rem = Math.max(0, d - el);
@@ -645,7 +685,7 @@
     $('big').classList.add('paused'); $('big').classList.remove('pulse');
     $('big').setAttribute('aria-label', t('resume'));
     $('hint').textContent = t('paused');
-    $('stop').textContent = t('stop'); $('stop').classList.remove('warn');
+    $('stop').textContent = t('stop'); $('stop').classList.remove('warn', 'mini');
     $('ctrls').hidden = false; $('wl').hidden = false;
     draw();
   };
@@ -654,7 +694,8 @@
     audio(); applyAudioMode();
     S.cdEnd = now() + 3000;
     $('ctrls').hidden = true; $('wl').hidden = true;
-    $('big').setAttribute('aria-label', t('pause'));
+    const manual = S.phases[S.i].manual;
+    $('big').setAttribute('aria-label', t(manual ? 'setDone' : 'pause'));
     $('hint').textContent = t('resuming');
     wake();
   };
@@ -663,6 +704,11 @@
     if (!S) return;
     if (S.finished) return backToSetup();
     if (S.cdEnd) return;
+    const p = S.phases[S.i];
+    if (p.manual && !S.paused) {
+      if (now() - S.t0 < MANUAL_GUARD) return;   // anti-touche accidentelle
+      return advance(false);
+    }
     S.paused ? resume() : pause();
   });
   $('stop').addEventListener('click', () => {
@@ -896,7 +942,7 @@
     const b = e.target.closest('[data-lang]'); if (!b) return;
     lang = b.dataset.lang;
     try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
-    applyLang();
+    applyLang(); renderSetup();
   });
 
   applyLang();
