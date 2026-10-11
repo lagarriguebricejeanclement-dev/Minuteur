@@ -676,7 +676,7 @@
     cancelAnimationFrame(rafId); clearInterval(iv);
     const f = () => { draw(); if (S && !S.finished) rafId = requestAnimationFrame(f); };
     f();
-    iv = setInterval(draw, 250);   // filet de sécurité si l'affichage ralentit
+    iv = setInterval(() => { draw(); keepAudioAlive(); }, 250);   // filet de sécurité si l'affichage ralentit
   };
 
   const pause = () => {
@@ -726,7 +726,7 @@
   // Si on quitte l'app : pause automatique
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pause();
-    else if (S && !S.finished && !S.paused) wake();
+    else { if (S && !S.finished && !S.paused) wake(); if (S) revive(); }
   });
 
   // ---------- Garder l'écran allumé (Wake Lock) ----------
@@ -755,8 +755,31 @@
       master = ctx.createGain(); master.gain.value = 0.9;
       master.connect(comp); comp.connect(ctx.destination);
     }
-    if (ctx.state !== 'running') ctx.resume();
+    if (ctx.state !== 'running') revive();
     return ctx;
+  };
+
+  // Après une interruption (notification, appel…), iOS peut laisser le son coupé.
+  // On le relance dès que possible : à chaque son, toutes les secondes pendant la séance,
+  // au retour dans l'app et à chaque toucher de l'écran.
+  const revive = () => {
+    if (!ctx || ctx.state === 'running' || ctx.state === 'closed') return Promise.resolve();
+    applyAudioMode();
+    return ctx.resume().catch(() => {});
+  };
+  let lastRevive = 0;
+  const keepAudioAlive = () => {
+    if (!S || S.finished || !ctx || ctx.state === 'running') return;
+    if (now() - lastRevive < 1000) return;
+    lastRevive = now(); revive();
+  };
+  ['touchend', 'click'].forEach(ev => document.addEventListener(ev, () => { if (S) revive(); }, true));
+  // Un son demandé pendant que le son est coupé part dès la reprise (s'il n'est pas trop tard)
+  const play = fn => () => {
+    audio();
+    if (ctx.state === 'running') return fn();
+    const asked = now();
+    revive().then(() => { if (ctx.state === 'running' && now() - asked < 800) fn(); });
   };
 
   // Une note : fréquence (Hz), début (s), durée (s), timbre
@@ -905,10 +928,10 @@
 
   // Sons retenus au banc d'écoute : 3-2-1 Doux · Départ · Dégonflage sifflé · Fanfare
   const SOUNDS = {
-    tick: () => note(880, 0, 0.12, 'doux'),
-    work: () => WORK.go(),
-    rest: () => REST.deflate(),
-    end:  () => END.fanfare(),
+    tick: play(() => note(880, 0, 0.12, 'doux')),
+    work: play(() => WORK.go()),
+    rest: play(() => REST.deflate()),
+    end:  play(() => END.fanfare()),
   };
 
   const toast = $('toast'); let tt = 0;
