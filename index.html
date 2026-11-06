@@ -266,6 +266,11 @@
   .chosen { font-size: 15px; color: var(--num); text-align: center; }
 
 
+  .unmute { position: fixed; inset: 0; z-index: 25; appearance: none; border: 0; cursor: pointer;
+            background: rgba(0,0,0,.25); display: flex; align-items: flex-start; justify-content: center;
+            padding: max(24px, env(safe-area-inset-top)) 16px 0; }
+  .unmute span { font: 700 18px var(--font); color: var(--on-acc); background: var(--acc);
+                 padding: 14px 22px; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
   .flash { position: fixed; inset: 0; background: var(--flash); pointer-events: none; opacity: 0; z-index: 30; }
   .flash.go { animation: flash .5s ease-out; }
   @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
@@ -371,6 +376,9 @@
   </div>
 </div>
 
+<!-- Son coupé par iOS : le premier toucher sert seulement à le rétablir -->
+<button class="unmute" id="unmute" hidden><span data-t="unmute">Son coupé · toucher l'écran</span></button>
+
 <div class="flash" id="flash"></div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -393,7 +401,7 @@
           ex1: 'Exercice', round1: 'Round', prep: 'Préparez-vous', done: 'Terminé',
           back: 'Toucher pour revenir', paused: 'En pause · toucher pour reprendre', resuming: 'Reprise',
           pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter', confirm: 'Confirmer', cancel: 'Annuler',
-          settings: 'Réglages', language: 'Langue',
+          settings: 'Réglages', language: 'Langue', unmute: 'Son coupé · toucher l\'écran',
           manual: 'Manuel', sets: 'Séries', done1: 'Done', setDone: 'Série terminée', aStartSets: 'Démarrer la séance : {n} séries',
           wlYes: 'Écran maintenu allumé : oui',
           wlNo: 'Écran maintenu allumé : non. Réglez le verrouillage automatique sur « Jamais » pendant les tests.' },
@@ -405,7 +413,7 @@
           ex1: 'Ejercicio', round1: 'Ronda', prep: 'Prepárate', done: 'Terminado',
           back: 'Toca para volver', paused: 'En pausa · toca para reanudar', resuming: 'Reanudando',
           pause: 'Pausa', resume: 'Reanudar', stop: 'Detener', confirm: 'Confirmar', cancel: 'Cancelar',
-          settings: 'Ajustes', language: 'Idioma',
+          settings: 'Ajustes', language: 'Idioma', unmute: 'Sonido cortado · toca la pantalla',
           manual: 'Manual', sets: 'Series', done1: 'Done', setDone: 'Serie terminada', aStartSets: 'Iniciar la sesión: {n} series',
           wlYes: 'Pantalla siempre encendida: sí',
           wlNo: 'Pantalla siempre encendida: no. Pon el bloqueo automático en «Nunca» durante las pruebas.' },
@@ -417,7 +425,7 @@
           ex1: 'Exercise', round1: 'Round', prep: 'Get ready', done: 'Done',
           back: 'Tap to go back', paused: 'Paused · tap to resume', resuming: 'Resuming',
           pause: 'Pause', resume: 'Resume', stop: 'Stop', confirm: 'Confirm', cancel: 'Cancel',
-          settings: 'Settings', language: 'Language',
+          settings: 'Settings', language: 'Language', unmute: 'Sound off · tap the screen',
           manual: 'Manual', sets: 'Sets', done1: 'Done', setDone: 'Set done', aStartSets: 'Start workout: {n} sets',
           wlYes: 'Screen kept on: yes',
           wlNo: 'Screen kept on: no. Set Auto-Lock to “Never” during tests.' },
@@ -721,7 +729,7 @@
   });
 
   const backToSetup = () => {
-    cancelAnimationFrame(rafId); clearInterval(iv); unwake();
+    cancelAnimationFrame(rafId); clearInterval(iv); unwake(); $('unmute').hidden = true;
     S = null; delete root.dataset.mode;
     $('session').hidden = true; $('setup').hidden = false;
     $('big').classList.remove('pulse', 'paused'); $('clock').classList.remove('cd');
@@ -770,12 +778,23 @@
     applyAudioMode();
     return ctx.resume().catch(() => {});
   };
-  let lastRevive = 0;
+  // Si iOS refuse de rendre le son sans toucher (retour dans l'app), on affiche « Son coupé »
+  let lastRevive = 0, blockedSince = 0;
   const keepAudioAlive = () => {
-    if (!S || S.finished || !ctx || ctx.state === 'running') return;
-    if (now() - lastRevive < 1000) return;
-    lastRevive = now(); revive();
+    const active = S && !S.finished && !S.paused && ctx && !document.hidden;
+    if (!active || ctx.state === 'running') { blockedSince = 0; $('unmute').hidden = true; return; }
+    if (!blockedSince) blockedSince = now();
+    if (now() - lastRevive >= 1000) { lastRevive = now(); revive(); }
+    if (now() - blockedSince > 2000) $('unmute').hidden = false;
   };
+  $('unmute').addEventListener('click', () => {
+    audio();
+    try {   // un son muet joué pendant le toucher aide iOS à rendre le son
+      const src = ctx.createBufferSource(); src.buffer = ctx.createBuffer(1, 1, 22050);
+      src.connect(ctx.destination); src.start(0);
+    } catch (e) {}
+    $('unmute').hidden = true; blockedSince = now();
+  });
   ['touchend', 'click'].forEach(ev => document.addEventListener(ev, () => { if (S) revive(); }, true));
   // Un son demandé pendant que le son est coupé part dès la reprise (s'il n'est pas trop tard)
   const play = fn => () => {
