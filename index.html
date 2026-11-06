@@ -122,6 +122,21 @@
   .langs button[aria-checked="true"]::after { content: "✓"; color: var(--acc); font-weight: 700; }
   .langs button:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; }
 
+  /* Minuteurs avant / après séance (panneau Réglages) */
+  .mrows { margin-bottom: 8px; }
+  .mrow { appearance: none; cursor: pointer; width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+          background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--num) 14%, transparent);
+          padding: 10px 4px; font: 600 19px var(--font); color: var(--num); text-align: left; }
+  .mrow:last-child { border-bottom: 0; }
+  .mrow:focus-visible { outline: 2px solid var(--num); outline-offset: 2px; border-radius: 12px; }
+  .vchip { min-width: 104px; height: 46px; box-sizing: border-box; border-radius: 999px; padding: 0 14px;
+           display: inline-flex; align-items: center; justify-content: center;
+           font: 700 20px var(--font); font-variant-numeric: tabular-nums; color: var(--num); border: 2.5px solid transparent;
+           background:
+             linear-gradient(160deg, color-mix(in srgb, var(--acc) 14%, var(--bg-1)), var(--bg-2)) padding-box,
+             conic-gradient(from 200deg, var(--num), var(--acc) 45%, color-mix(in srgb, var(--acc) 30%, var(--bg-2)) 80%, var(--num)) border-box; }
+  #sheet { z-index: 12; }   /* la roulette passe au-dessus du panneau Réglages */
+
   /* Roulette */
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.18); opacity: 0; pointer-events: none;
            transition: opacity .2s ease; z-index: 10; touch-action: none; }
@@ -374,6 +389,11 @@
     <button role="radio" data-lang="es">Español</button>
     <button role="radio" data-lang="en">English</button>
   </div>
+  <div class="prefs-lbl" data-t="session">Séance</div>
+  <div class="mrows">
+    <button class="mrow" data-key="pre"><span data-t="tPre">Avant séance</span><span class="vchip" data-val></span></button>
+    <button class="mrow" data-key="post"><span data-t="tPost">Après séance</span><span class="vchip" data-val></span></button>
+  </div>
 </div>
 
 <!-- Son coupé par iOS : le premier toucher sert seulement à le rétablir -->
@@ -389,7 +409,6 @@
   const range = (a, b, s = 1) => { const r = []; for (let v = a; v <= b; v += s) r.push(v); return r; };
   const TIMES = range(5, 600, 5);
   const COUNTS = range(1, 20);
-  const PREP = 5;   // « Préparez-vous » avant la première phase (secondes)
 
   // ---------- Langues ----------
   const TEXTS = {
@@ -402,6 +421,7 @@
           back: 'Toucher pour revenir', paused: 'En pause · toucher pour reprendre', resuming: 'Reprise',
           pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter', confirm: 'Confirmer', cancel: 'Annuler',
           settings: 'Réglages', language: 'Langue', unmute: 'Son coupé · toucher l\'écran',
+          session: 'Séance', tPre: 'Avant séance', tPost: 'Après séance', post: 'Après séance', off: 'Off',
           manual: 'Manuel', sets: 'Séries', done1: 'Done', setDone: 'Série terminée', aStartSets: 'Démarrer la séance : {n} séries',
           wlYes: 'Écran maintenu allumé : oui',
           wlNo: 'Écran maintenu allumé : non. Réglez le verrouillage automatique sur « Jamais » pendant les tests.' },
@@ -414,6 +434,7 @@
           back: 'Toca para volver', paused: 'En pausa · toca para reanudar', resuming: 'Reanudando',
           pause: 'Pausa', resume: 'Reanudar', stop: 'Detener', confirm: 'Confirmar', cancel: 'Cancelar',
           settings: 'Ajustes', language: 'Idioma', unmute: 'Sonido cortado · toca la pantalla',
+          session: 'Sesión', tPre: 'Antes de la sesión', tPost: 'Después de la sesión', post: 'Después', off: 'Off',
           manual: 'Manual', sets: 'Series', done1: 'Done', setDone: 'Serie terminada', aStartSets: 'Iniciar la sesión: {n} series',
           wlYes: 'Pantalla siempre encendida: sí',
           wlNo: 'Pantalla siempre encendida: no. Pon el bloqueo automático en «Nunca» durante las pruebas.' },
@@ -426,6 +447,7 @@
           back: 'Tap to go back', paused: 'Paused · tap to resume', resuming: 'Resuming',
           pause: 'Pause', resume: 'Resume', stop: 'Stop', confirm: 'Confirm', cancel: 'Cancel',
           settings: 'Settings', language: 'Language', unmute: 'Sound off · tap the screen',
+          session: 'Workout', tPre: 'Before workout', tPost: 'After workout', post: 'After workout', off: 'Off',
           manual: 'Manual', sets: 'Sets', done1: 'Done', setDone: 'Set done', aStartSets: 'Start workout: {n} sets',
           wlYes: 'Screen kept on: yes',
           wlNo: 'Screen kept on: no. Set Auto-Lock to “Never” during tests.' },
@@ -448,8 +470,11 @@
     ex:     { title: 'tEx',     values: COUNTS, type: 'count' },
     rounds: { title: 'tRounds', values: COUNTS, type: 'count' },
     rr:     { title: 'tRr',     values: TIMES,  type: 'time' },
+    // Minuteurs du panneau Réglages : « Préparez-vous » réglable (5 s minimum) et après séance (Off possible)
+    pre:    { title: 'tPre',    values: TIMES,  type: 'time' },
+    post:   { title: 'tPost',   values: [0, ...TIMES], type: 'time', zero: 'off' },
   };
-  const state = { work: 30, rest: 30, ex: 5, rounds: 5, rr: 10 };
+  const state = { work: 30, rest: 30, ex: 5, rounds: 5, rr: 10, pre: 5, post: 0 };
 
   // Derniers réglages : gardés dans le téléphone et retrouvés à l'ouverture
   const SAVE = 'minuteur-reglages';
@@ -464,7 +489,7 @@
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return h ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
   };
-  const fmt = (f, v) => f.type === 'time' ? (v === 0 ? t('manual') : fmtTime(v)) : String(v);
+  const fmt = (f, v) => f.type === 'time' ? (v === 0 ? t(f.zero || 'manual') : fmtTime(v)) : String(v);
   const MANUAL_GUARD = 2000;   // touches ignorées pendant les 2 premières secondes d'une série manuelle
 
   const totalSeconds = () => {
@@ -507,7 +532,8 @@
   const closePicker = commit => {
     if (!current) return;
     if (commit) { state[current] = FIELDS[current].values[idxNow()]; saveState(); renderSetup(); }
-    current = null; scrim.classList.remove('open'); sheet.classList.remove('open');
+    current = null; sheet.classList.remove('open');
+    if (!prefs.classList.contains('open')) scrim.classList.remove('open');
     if (lastFocus) lastFocus.focus({ preventScroll: true });
   };
   let raf0 = 0;
@@ -536,21 +562,22 @@
   const prog = $('prog');
   prog.style.strokeDasharray = RING;
 
-  const LABEL = { prep: 'prep', work: 'work', rest: 'rest', rr: 'rr' };
-  const MODE  = { prep: 'repos', work: 'travail', rest: 'repos', rr: 'repos' };
+  const LABEL = { prep: 'prep', work: 'work', rest: 'rest', rr: 'rr', post: 'post' };
+  const MODE  = { prep: 'repos', work: 'travail', rest: 'repos', rr: 'repos', post: 'repos' };
 
   let S = null;   // état de la séance
   // Heure du téléphone : elle avance aussi quand l'app est en arrière-plan ou l'écran éteint
   const now = () => Date.now();
 
   const buildPhases = () => {
-    const ph = [{ type: 'prep', dur: PREP, e: -1, r: 0 }];
+    const ph = [{ type: 'prep', dur: state.pre, e: -1, r: 0 }];
     for (let r = 0; r < state.rounds; r++)
       for (let e = 0; e < state.ex; e++) {
         ph.push({ type: 'work', dur: state.work, e, r, manual: state.work === 0 });
         if (e < state.ex - 1) ph.push({ type: 'rest', dur: state.rest, e, r });
         else if (r < state.rounds - 1) ph.push({ type: 'rr', dur: state.rr, e, r });
       }
+    if (state.post) ph.push({ type: 'post', dur: state.post, e: state.ex - 1, r: state.rounds - 1 });
     return ph;
   };
 
@@ -558,7 +585,7 @@
 
   const startSound = type => {
     if (type === 'work') SOUNDS.work();
-    else if (type === 'rest' || type === 'rr') SOUNDS.rest();
+    else if (type === 'rest' || type === 'rr' || type === 'post') SOUNDS.rest();
   };
   const enterPhase = () => {
     const p = S.phases[S.i];
@@ -601,7 +628,7 @@
   const advance = natural => {
     const p = S.phases[S.i], t = now();
     const spent = p.manual ? t - S.t0 : natural ? p.dur * 1000 : Math.min(t - S.t0, p.dur * 1000);
-    if (p.type !== 'prep') S.done += spent;
+    if (p.type !== 'prep' && p.type !== 'post') S.done += spent;   // ni avant ni après séance
     S.i++;
     if (S.i >= S.phases.length) return finish();
     S.t0 = natural ? S.t0 + p.dur * 1000 : t;
@@ -679,7 +706,7 @@
     if (!S.paused && sec >= 1 && sec <= 3 && S.lastTick !== S.i + ':' + sec) {
       S.lastTick = S.i + ':' + sec; SOUNDS.tick();
     }
-    const run = S.done + (cur.type !== 'prep' ? Math.min(el, d) : 0);
+    const run = S.done + (cur.type !== 'prep' && cur.type !== 'post' ? Math.min(el, d) : 0);
     $('elapsed').textContent = fmtTime(Math.floor(run / 1000));
   };
 
