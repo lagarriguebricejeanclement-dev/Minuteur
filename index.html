@@ -532,7 +532,8 @@
   const MODE  = { prep: 'repos', work: 'travail', rest: 'repos', rr: 'repos' };
 
   let S = null;   // état de la séance
-  const now = () => performance.now();
+  // Heure du téléphone : elle avance aussi quand l'app est en arrière-plan ou l'écran éteint
+  const now = () => Date.now();
 
   const buildPhases = () => {
     const ph = [{ type: 'prep', dur: PREP, e: -1, r: 0 }];
@@ -553,7 +554,7 @@
   };
   const enterPhase = () => {
     const p = S.phases[S.i];
-    startSound(p.type);
+    if (!S.quiet) startSound(p.type);
     root.dataset.mode = MODE[p.type];
     $('phase').textContent = t(LABEL[p.type]);
     setDots('dots-ex', state.ex, p.e);
@@ -652,9 +653,12 @@
       return;
     }
     if (!S.paused) {
+      // Retour dans l'app après une absence : on rattrape en silence les phases passées
+      S.quiet = el >= S.phases[S.i].dur * 1000 + 1500;
       while (!S.phases[S.i].manual && el >= S.phases[S.i].dur * 1000) {
         advance(true); if (S.finished) return; el = t - S.t0;
       }
+      S.quiet = false;
       if (S.phases[S.i].manual) return draw();   // on vient d'entrer dans une série manuelle
     }
     const cur = S.phases[S.i], d = cur.dur * 1000;
@@ -723,10 +727,9 @@
     $('big').classList.remove('pulse', 'paused'); $('clock').classList.remove('cd');
   };
 
-  // Si on quitte l'app : pause automatique
+  // Si on quitte l'app : la séance continue (sans son tant que l'app est en arrière-plan)
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pause();
-    else { if (S && !S.finished && !S.paused) wake(); if (S) revive(); }
+    if (!document.hidden) { if (S && !S.finished && !S.paused) wake(); if (S) revive(); }
   });
 
   // ---------- Garder l'écran allumé (Wake Lock) ----------
